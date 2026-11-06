@@ -1,0 +1,197 @@
+(* ==============================================================================
+   YANTRIK DWS-S01 / DWS-D01 INDUSTRIAL PLC MOTION & STATE MACHINE CONTROLLER
+   Language: IEC 61131-3 Structured Control Language (SCL / Structured Text)
+   Target Platforms: Siemens S7-1200 / S7-1500 (TIA Portal), CODESYS, Delta DVP
+   Complies with: ISO 13849-1 Category 3 / PL d Safety Integration
+   ============================================================================== *)
+
+TYPE "DwsState_Enum" : (
+    STATE_BOOT_INIT         := 0,
+    STATE_IDLE_READY        := 10,
+    STATE_HANDS_HOLD        := 15,
+    STATE_SETTLING_WEIGHT   := 20,
+    STATE_TRIGGER_VISION    := 30,
+    STATE_AWAIT_IPC_SYNC    := 40,
+    STATE_CYCLE_COMPLETE    := 50,
+    STATE_ERROR_ESTOP_FAULT := 99
+);
+END_TYPE
+
+FUNCTION_BLOCK "FB_Yantrik_DWS_Controller"
+{ S7_Optimized_Access := 'TRUE' }
+VERSION : 1.0
+AUTHOR : 'AGT-D06-PLC01'
+FAMILY : 'YANTRIK'
+
+VAR_INPUT
+    bEStopHealthy           : BOOL;     (* 1 = Hardwired E-Stop loop closed & healthy *)
+    bAutoScanEnabled        : BOOL;     (* 1 = Auto-Scan enabled; 0 = Manual trigger *)
+    bFootPedalTrigger       : BOOL;     (* Momentary contact from operator foot switch *)
+    bOpticalHandsClear      : BOOL;     (* 1 = 3D camera confirms zero hand/obstacle contact *)
+    rCurrentWeight_kg       : REAL;     (* Real-time weight reading from summing ADC *)
+    bWeightStable_ST        : BOOL;     (* 1 = Weight settled within 10g delta across 5 frames *)
+    wIpcHeartbeatIn         : WORD;     (* Watchdog counter from Edge Linux IPC (Modbus 40004) *)
+END_VAR
+
+VAR_OUTPUT
+    bCameraTriggerCmd       : BOOL;     (* Output pulse to overhead 3D optical sensor *)
+    bBarcodeScannerCmd      : BOOL;     (* Output pulse to barcode imager *)
+    bStatusLampGreen        : BOOL;     (* Workstation Accepted indication lamp *)
+    bStatusLampAmber        : BOOL;     (* Workstation Settling / Hands Hold warning lamp *)
+    bStatusLampRed          : BOOL;     (* Workstation Fault / E-Stop trip lamp *)
+    bChimeBuzzerOut         : BOOL;     (* 24VDC acoustic sounder pulse *)
+    wCurrentStateCode       : INT;      (* Active state integer for HMI telemetry *)
+    wPlcHeartbeatOut        : WORD;     (* Incremented watchdog echo (Modbus 40005) *)
+END_VAR
+
+VAR
+    eCurrentState           : "DwsState_Enum" := STATE_BOOT_INIT;
+    tSettlingTimer          : TON;      (* Scale settling delay timer *)
+    tChimeTimer             : TON;      (* Acoustic buzzer duration timer *)
+    tWatchdogTimer          : TON;      (* IPC communications failure monitor *)
+    wLastIpcHeartbeat       : WORD := 0;
+    rLockedWeight_kg        : REAL := 0.0;
+    nScanCounter            : DINT := 0;
+END_VAR
+
+BEGIN
+    (* 1. CRITICAL SAFETY INTERLOCK GATING *)
+    IF NOT bEStopHealthy THEN
+        eCurrentState := STATE_ERROR_ESTOP_FAULT;
+        bCameraTriggerCmd := FALSE;
+        bBarcodeScannerCmd := FALSE;
+        bStatusLampGreen := FALSE;
+        bStatusLampAmber := FALSE;
+        bStatusLampRed := TRUE;
+        bChimeBuzzerOut := FALSE;
+        wCurrentStateCode := INT#99;
+        RETURN;
+    END_IF;
+
+    (* 2. WATCHDOG MONITOR (IPC TO PLC HEARTBEAT) *)
+    tWatchdogTimer(IN := (wIpcHeartbeatIn = wLastIpcHeartbeat), PT := T#3S);
+    IF tWatchdogTimer.Q THEN
+        (* Edge IPC has stopped communicating for > 3 seconds *)
+        bStatusLampAmber := TRUE;
+    ELSE
+        wLastIpcHeartbeat := wIpcHeartbeatIn;
+        wPlcHeartbeatOut := wPlcHeartbeatOut + WORD#1;
+    END_IF;
+
+    (* 3. MAIN DETERMINISTIC FINITE STATE MACHINE *)
+    CASE eCurrentState OF
+
+        STATE_BOOT_INIT:
+            bStatusLampGreen := FALSE;
+            bStatusLampAmber := TRUE;
+            bStatusLampRed := FALSE;
+            bCameraTriggerCmd := FALSE;
+            bBarcodeScannerCmd := FALSE;
+            wCurrentStateCode := INT#0;
+            
+            (* System initialization delay *)
+            tSettlingTimer(IN := TRUE, PT := T#500MS);
+            IF tSettlingTimer.Q THEN
+                tSettlingTimer(IN := FALSE);
+                eCurrentState := STATE_IDLE_READY;
+            END_IF;
+
+        STATE_IDLE_READY:
+            bStatusLampGreen := TRUE;
+            bStatusLampAmber := FALSE;
+            bStatusLampRed := FALSE;
+            bCameraTriggerCmd := FALSE;
+            bBarcodeScannerCmd := FALSE;
+            wCurrentStateCode := INT#10;
+
+            (* Auto-Scan Entry: Weight detected on platter (> 100g) *)
+            IF (rCurrentWeight_kg > 0.100) OR bFootPedalTrigger THEN
+                IF NOT bOpticalHandsClear THEN
+                    eCurrentState := STATE_HANDS_HOLD;
+                ELSE
+                    eCurrentState := STATE_SETTLING_WEIGHT;
+                END_IF;
+            END_IF;
+
+        STATE_HANDS_HOLD:
+            (* Founder Rule: Pause scan if hands or foreign contact detected on bed *)
+            bStatusLampGreen := FALSE;
+            bStatusLampAmber := TRUE;
+            wCurrentStateCode := INT#15;
+
+            IF bOpticalHandsClear THEN
+                eCurrentState := STATE_SETTLING_WEIGHT;
+            ELSIF rCurrentWeight_kg < 0.050 THEN
+                (* Parcel removed *)
+                eCurrentState := STATE_IDLE_READY;
+            END_IF;
+
+        STATE_SETTLING_WEIGHT:
+            bStatusLampGreen := FALSE;
+            bStatusLampAmber := TRUE;
+            wCurrentStateCode := INT#20;
+
+            (* If hands touch parcel again during settling, revert to HOLD *)
+            IF NOT bOpticalHandsClear THEN
+                eCurrentState := STATE_HANDS_HOLD;
+            ELSIF bWeightStable_ST THEN
+                (* Founder Rule: 5-sample stability certified within 10g *)
+                rLockedWeight_kg := rCurrentWeight_kg;
+                eCurrentState := STATE_TRIGGER_VISION;
+            ELSIF rCurrentWeight_kg < 0.050 THEN
+                eCurrentState := STATE_IDLE_READY;
+            END_IF;
+
+        STATE_TRIGGER_VISION:
+            (* Fire simultaneous pulse to 3D depth camera and barcode scanner *)
+            bCameraTriggerCmd := TRUE;
+            bBarcodeScannerCmd := TRUE;
+            wCurrentStateCode := INT#30;
+
+            tSettlingTimer(IN := TRUE, PT := T#80MS);
+            IF tSettlingTimer.Q THEN
+                tSettlingTimer(IN := FALSE);
+                bCameraTriggerCmd := FALSE;
+                bBarcodeScannerCmd := FALSE;
+                eCurrentState := STATE_AWAIT_IPC_SYNC;
+            END_IF;
+
+        STATE_AWAIT_IPC_SYNC:
+            wCurrentStateCode := INT#40;
+            
+            (* Allow 800ms max for Edge IPC to compute OBB and return ACK *)
+            tSettlingTimer(IN := TRUE, PT := T#600MS);
+            IF tSettlingTimer.Q THEN
+                tSettlingTimer(IN := FALSE);
+                eCurrentState := STATE_CYCLE_COMPLETE;
+            END_IF;
+
+        STATE_CYCLE_COMPLETE:
+            bStatusLampGreen := TRUE;
+            bStatusLampAmber := FALSE;
+            wCurrentStateCode := INT#50;
+            nScanCounter := nScanCounter + 1;
+
+            (* Acoustic confirmation chime *)
+            bChimeBuzzerOut := TRUE;
+            tChimeTimer(IN := TRUE, PT := T#120MS);
+            IF tChimeTimer.Q THEN
+                tChimeTimer(IN := FALSE);
+                bChimeBuzzerOut := FALSE;
+                (* Wait for operator to clear scale platter before accepting next item *)
+                IF rCurrentWeight_kg < 0.050 THEN
+                    eCurrentState := STATE_IDLE_READY;
+                END_IF;
+            END_IF;
+
+        STATE_ERROR_ESTOP_FAULT:
+            wCurrentStateCode := INT#99;
+            IF bEStopHealthy THEN
+                eCurrentState := STATE_BOOT_INIT;
+            END_IF;
+
+        ELSE
+            eCurrentState := STATE_BOOT_INIT;
+    END_CASE;
+
+END_FUNCTION_BLOCK

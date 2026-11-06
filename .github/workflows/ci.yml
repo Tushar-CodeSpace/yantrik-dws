@@ -1,0 +1,29 @@
+name: YANTRIK DWS-S01 CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-simulate:
+    name: Run Unit Tests & E2E Simulation Harness
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Core Pipeline Unit Tests (16 Tests)
+        run: |
+          python3 tests/test_dws_pipeline.py
+
+      - name: Run 100-Parcel E2E Simulation Stress Harness
+        run: |
+          python3 tests/simulators/run_e2e_simulation.py

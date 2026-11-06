@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  yantrik-dws:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: yantrik/dws-s01:1.1.0
+    container_name: yantrik_dws_core
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - dws_data:/app/data
+    environment:
+      - YANTRIK_PORT=8000
+      - YANTRIK_ENV=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  dws_data:
+    driver: local

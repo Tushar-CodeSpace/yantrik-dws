@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YANTRIK DWS-S01 — Industrial Operator HMI</title>
+  <style>
+    :root {
+      --bg-dark: #0A0C10;
+      --panel-bg: #14171F;
+      --panel-border: #232836;
+      --text-main: #F0F3F8;
+      --text-muted: #8E9AA8;
+      --orange-primary: #F07204;
+      --orange-glow: rgba(240, 114, 4, 0.25);
+      --green-status: #10B981;
+      --green-glow: rgba(16, 185, 129, 0.2);
+      --red-status: #EF4444;
+      --blue-accent: #3B82F6;
+      --font-display: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-display);
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      background: var(--panel-bg);
+      border-bottom: 2px solid var(--panel-border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-emblem {
+      width: 32px;
+      height: 32px;
+    }
+    .brand-text h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: #FFFFFF;
+      line-height: 1.1;
+    }
+    .brand-text p {
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: 0.24em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .badge-product {
+      background: rgba(240, 114, 4, 0.12);
+      border: 1px solid var(--orange-primary);
+      color: var(--orange-primary);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .status-cluster {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--panel-border);
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green-status);
+      box-shadow: 0 0 8px var(--green-glow);
+    }
+    .clock-display {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-main);
+      padding-left: 12px;
+      border-left: 1px solid var(--panel-border);
+    }
+
+    /* Main Dashboard Layout */
+    main {
+      flex: 1;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 20px;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Left Column: Visualizer & Live Telemetry */
+    .viewport-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+    .card-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+    .status-tag-active {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green-status);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Canvas 3D Perspective Bed */
+    .visualizer-container {
+      position: relative;
+      height: 380px;
+      background: radial-gradient(circle at center, #1C2230 0%, #0E1118 80%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    canvas#stageCanvas {
+      width: 100%;
+      height: 100%;
+    }
+    .scan-laser-line {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #F07204, #FFB020, #F07204, transparent);
+      box-shadow: 0 0 15px #F07204, 0 0 30px #FFB020;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .scan-laser-active {
+      animation: laserSweep 0.8s ease-in-out forwards;
+    }
+    @keyframes laserSweep {
+      0% { top: 15%; opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { top: 85%; opacity: 0; }
+    }
+
+    /* Dimension Callout HUD */
+    .hud-overlay {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+    }
+    .hud-dim-box {
+      background: rgba(10, 12, 16, 0.85);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(8px);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+
+    /* Right Column: Measurement Telemetry Cards */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+    }
+    .metric-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .metric-val {
+      font-family: var(--font-mono);
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+    .metric-unit {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    /* Weight Card Highlight */
+    .weight-card {
+      background: linear-gradient(135deg, var(--panel-bg) 60%, rgba(240, 114, 4, 0.08) 100%);
+      border: 1px solid rgba(240, 114, 4, 0.35);
+    }
+    .weight-card .metric-val {
+      color: #FFA439;
+    }
+
+    /* Commercial Revenue Billable Card */
+    .billable-card {
+      grid-column: span 3;
+      background: linear-gradient(90deg, #182030 0%, #151821 100%);
+      border: 2px solid var(--blue-accent);
+      border-radius: 8px;
+      padding: 18px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .billable-details h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin-bottom: 4px;
+    }
+    .billable-details p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .billable-badge {
+      font-family: var(--font-mono);
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #60A5FA;
+    }
+    .recovered-tag {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--green-status);
+      color: var(--green-status);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-top: 6px;
+      display: inline-block;
+    }
+
+    /* Barcode Banner */
+    .barcode-panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 14px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .barcode-code {
+      font-family: var(--font-mono);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      letter-spacing: 0.15em;
+    }
+    .barcode-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Touch Control Bar */
+    .control-cluster {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .btn-action {
+      border: none;
+      border-radius: 6px;
+      padding: 16px 20px;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s ease-in-out;
+    }
+    .btn-trigger {
+      background: var(--orange-primary);
+      color: #FFFFFF;
+      box-shadow: 0 4px 14px var(--orange-glow);
+    }
+    .btn-trigger:hover {
+      background: #FF851B;
+      transform: translateY(-2px);
+    }
+    .btn-trigger:active {
+      transform: translateY(1px);
+    }
+    .btn-secondary {
+      background: #1C2230;
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+    }
+    .btn-secondary:hover {
+      background: #252D40;
+    }
+
+    /* Audit Manifest Table */
+    .manifest-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      overflow: hidden;
+      flex: 1;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    th {
+      background: #0E1118;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--panel-border);
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+    }
+    tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .status-badge-ok {
+      color: var(--green-status);
+      font-weight: 600;
+    }
+
+    /* Footer Information */
+    footer {
+      background: var(--panel-bg);
+      border-top: 1px solid var(--panel-border);
+      padding: 10px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .hotkey-tag {
+      background: #232836;
+      color: #FFFFFF;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Brand Navigation Header -->
+  <header>
+    <div class="brand-section">
+      <div class="brand-logo">
+        <svg class="logo-emblem" viewBox="0 0 1000 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="120,200 330,200 490,360 370,480" fill="#FFFFFF"/>
+          <polygon points="670,200 880,200 695,395 410,510" fill="#F07204"/>
+          <polygon points="565,485 525,625 370,810 370,565" fill="#FFFFFF"/>
+        </svg>
+        <div class="brand-text">
+          <h1>YANTRIK</h1>
+          <p>ENGINEERING INTELLIGENCE</p>
+        </div>
+      </div>
+      <div class="badge-product">DWS-S01 STATIC WORKSTATION</div>
+    </div>
+
+    <div class="status-cluster">
+      <div class="status-pill"><span class="dot"></span> SCALE: RS-232 100Hz</div>
+      <div class="status-pill"><span class="dot"></span> 3D SENSOR: ACTIVE</div>
+      <div class="status-pill"><span class="dot"></span> WMS GATEWAY: ONLINE</div>
+      <div class="clock-display" id="clockElem">12:00:00</div>
+    </div>
+  </header>
+
+  <!-- Main Workstation View -->
+  <main>
+    <!-- Left: 3D Visualization Bed -->
+    <div class="viewport-card">
+      <div class="card-header">
+        <span>OVERHEAD OPTICAL GANTRY & WEIGH PLATTER</span>
+        <span class="status-tag-active">● CALIBRATED OIML CLASS III</span>
+      </div>
+
+      <div class="visualizer-container">
+        <canvas id="stageCanvas"></canvas>
+        <div class="scan-laser-line" id="laserLine"></div>
+
+        <div class="hud-overlay">
+          <div class="hud-dim-box" id="hudDimText">BOX: 380 × 260 × 180 mm</div>
+          <div class="hud-dim-box" id="hudStatusText">STATE: READY</div>
+        </div>
+      </div>
+
+      <!-- Live Barcode Panel -->
+      <div class="barcode-panel" style="margin: 16px; border-radius: 6px;">
+        <div>
+          <div class="barcode-code" id="barcodeDisplay">YT882910394</div>
+          <div class="barcode-meta">SYMBOLOGY: CODE 128 | CONFIDENCE: 99.8%</div>
+        </div>
+        <div style="text-align: right;">
+          <div class="status-tag-active">● SCANNED</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;" id="latencyTag">LATENCY: 42ms</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Metrics & Operator Controls -->
+    <div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-title">Length (L)</div>
+          <div class="metric-val"><span id="valL">38.0</span> <span class="metric-unit">cm</span></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Width (W)</div>
+          <div class="metric-val"><span id="valW">26.0</span> <span class="metric-unit">cm</span></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Height (H)</div>
+          <div class="metric-val"><span id="valH">18.0</span> <span class="metric-unit">cm</span></div>
+        </div>
+        
+        <div class="metric-card weight-card">
+          <div class="metric-title">Gross Weight</div>
+          <div class="metric-val"><span id="valGross">2.450</span> <span class="metric-unit">kg</span></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Volumetric Wt</div>
+          <div class="metric-val"><span id="valVol">3.556</span> <span class="metric-unit">kg</span></div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Volume</div>
+          <div class="metric-val"><span id="valVolCm3">17,784</span> <span class="metric-unit">cm³</span></div>
+        </div>
+      </div>
+
+      <!-- Commercial Billable Weight Banner -->
+      <div class="billable-card" style="margin-bottom: 20px;">
+        <div class="billable-details">
+          <h3>BILLABLE CHARGEABLE WEIGHT</h3>
+          <p>Higher of Actual vs. Dimensional Weight (Divisor: 5000)</p>
+          <div class="recovered-tag" id="recoveryBadge">⚡ +1.106 kg UNBILLED VOLUME RECOVERED</div>
+        </div>
+        <div class="billable-badge" id="valBillable">3.556 kg</div>
+      </div>
+
+      <!-- Action Control Cluster -->
+      <div class="control-cluster" style="grid-template-columns: 1.5fr 1fr 1fr 1fr;">
+        <button class="btn-action btn-trigger" id="btnScanTrigger">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          AUTO-SCAN (OR SPACEBAR)
+        </button>
+        <button class="btn-action btn-secondary" id="btnSimHand" style="border-color: rgba(239, 68, 68, 0.4);">
+          SIMULATE HAND ON BOX
+        </button>
+        <button class="btn-action btn-secondary" id="btnAutoDemo">AUTO DEMO</button>
+        <button class="btn-action btn-secondary" id="btnZeroScale">ZERO / TARE</button>
+      </div>
+
+      <!-- Live Audit Intake Table -->
+      <div class="manifest-card">
+        <div class="card-header">
+          <span>INTAKE DISPATCH MANIFEST (LOCAL AUDIT DB)</span>
+          <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--green-status);" id="revenueToday">SAVED: +₹1,480 TODAY</span>
+        </div>
+        <table id="manifestTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Barcode</th>
+              <th>Dimensions (cm)</th>
+              <th>Gross</th>
+              <th>Billable</th>
+              <th>WMS Status</th>
+            </tr>
+          </thead>
+          <tbody id="manifestBody">
+            <!-- Dynamically populated rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Operational Status -->
+  <footer>
+    <div>OPERATOR HOTKEY: Press <span class="hotkey-tag">SPACEBAR</span> for Simulated Foot Pedal Scan | Press <span class="hotkey-tag">Z</span> to Tare Scale</div>
+    <div>YANTRIK DWS Core Engine v1.1.0 | Connected via Localhost IPC</div>
+  </footer>
+
+  <script>
+    // Audio Chime Generator using Web Audio API (Zero external MP3 dependencies)
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBeep(frequency = 880, duration = 0.08) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+    function playSuccessChime() {
+      playBeep(987.77, 0.06); // B5
+      setTimeout(() => playBeep(1318.51, 0.12), 60); // E6
+    }
+
+    // Digital Clock
+    function updateClock() {
+      const d = new Date();
+      document.getElementById('clockElem').innerText = d.toTimeString().split(' ')[0];
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // 2.5D Isometric Canvas Visualizer
+    const canvas = document.getElementById('stageCanvas');
+    const ctx = canvas.getContext('2d');
+    let currentBox = { l: 380, w: 260, h: 180, rot: 0.02 };
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      drawStage();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function drawStage() {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const cx = w / 2;
+      const cy = h / 2 + 50;
+
+      // Draw Stainless Steel Scale Platter (Isometric Diamond)
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 100);
+      ctx.lineTo(cx + 180, cy - 10);
+      ctx.lineTo(cx, cy + 80);
+      ctx.lineTo(cx - 180, cy - 10);
+      ctx.closePath();
+      ctx.fillStyle = '#1B202B';
+      ctx.fill();
+      ctx.strokeStyle = '#2E384D';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Platter Grid Lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      ctx.lineWidth = 1;
+      for (let i = -120; i <= 120; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(cx + i * 0.8, cy - 50 + i * 0.4);
+        ctx.lineTo(cx + i * 0.8 - 60, cy + 20 + i * 0.4);
+        ctx.stroke();
+      }
+
+      // Draw Parcel Box
+      const scaleFactor = 0.45;
+      const bl = currentBox.l * scaleFactor;
+      const bw = currentBox.w * scaleFactor;
+      const bh = currentBox.h * scaleFactor;
+
+      const px = cx;
+      const py = cy - 20;
+
+      // Top Face
+      ctx.beginPath();
+      ctx.moveTo(px, py - bh);
+      ctx.lineTo(px + bw * 0.86, py - bh - bw * 0.5);
+      ctx.lineTo(px + bw * 0.86 - bl * 0.86, py - bh - bw * 0.5 - bl * 0.5);
+      ctx.lineTo(px - bl * 0.86, py - bh - bl * 0.5);
+      ctx.closePath();
+      ctx.fillStyle = '#C87D32';
+      ctx.fill();
+      ctx.strokeStyle = '#F07204';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Right Face
+      ctx.beginPath();
+      ctx.moveTo(px, py - bh);
+      ctx.lineTo(px + bw * 0.86, py - bh - bw * 0.5);
+      ctx.lineTo(px + bw * 0.86, py - bw * 0.5);
+      ctx.lineTo(px, py);
+      ctx.closePath();
+      ctx.fillStyle = '#A05A18';
+      ctx.fill();
+      ctx.strokeStyle = '#F07204';
+      ctx.stroke();
+
+      // Left Face
+      ctx.beginPath();
+      ctx.moveTo(px, py - bh);
+      ctx.lineTo(px - bl * 0.86, py - bh - bl * 0.5);
+      ctx.lineTo(px - bl * 0.86, py - bl * 0.5);
+      ctx.lineTo(px, py);
+      ctx.closePath();
+      ctx.fillStyle = '#B46A20';
+      ctx.fill();
+      ctx.strokeStyle = '#F07204';
+      ctx.stroke();
+
+      // Overhead Bounding Box Wireframe
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(px - 140, py - 180, 280, 240);
+      ctx.setLineDash([]);
+    }
+
+    // Parcel Scan Generator
+    let totalRevenueRecovered = 1480;
+    const manifestHistory = [
+      { time: '14:28:11', barcode: 'YT902184019', dim: '42 × 31 × 20', gross: 2.15, billable: 5.21, delta: 3.06 },
+      { time: '14:26:45', barcode: 'YT746201948', dim: '25 × 18 × 12', gross: 4.80, billable: 4.80, delta: 0.00 },
+      { time: '14:24:02', barcode: 'YT392019482', dim: '51 × 38 × 29', gross: 6.40, billable: 11.24, delta: 4.84 }
+    ];
+
+    function renderManifestTable() {
+      const tbody = document.getElementById('manifestBody');
+      tbody.innerHTML = '';
+      manifestHistory.slice(0, 5).forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.time}</td>
+          <td style="color:#60A5FA;">${row.barcode}</td>
+          <td>${row.dim}</td>
+          <td>${row.gross.toFixed(2)} kg</td>
+          <td style="color:#FFA439; font-weight:700;">${row.billable.toFixed(2)} kg</td>
+          <td><span class="status-badge-ok">● SYNCD (200)</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    renderManifestTable();
+
+    // Hand Interference Simulation State (Founder's Rule)
+    let isHandDetected = false;
+    const btnSimHand = document.getElementById('btnSimHand');
+    btnSimHand.addEventListener('click', () => {
+      isHandDetected = !isHandDetected;
+      if (isHandDetected) {
+        btnSimHand.innerText = "HAND TOUCHING (REMOVE TO SCAN)";
+        btnSimHand.style.background = "#EF4444";
+        btnSimHand.style.color = "#FFFFFF";
+        document.getElementById('hudStatusText').innerText = "HOLD: HAND DETECTED ON PLATTER";
+        document.getElementById('hudStatusText').style.color = "#EF4444";
+        playBeep(220, 0.2); // Low frequency warning buzzer
+      } else {
+        btnSimHand.innerText = "SIMULATE HAND ON BOX";
+        btnSimHand.style.background = "#1C2230";
+        btnSimHand.style.color = "var(--text-main)";
+        document.getElementById('hudStatusText').innerText = "CLEARANCE OK: AUTO-SCANNING...";
+        document.getElementById('hudStatusText').style.color = "#FFA439";
+        setTimeout(executeScan, 300);
+      }
+    });
+
+    // Trigger Measurement Scan with Founder's 5-Sample Stability Rule
+    let isScanning = false;
+    function executeScan() {
+      if (isScanning) return;
+      if (isHandDetected) {
+        document.getElementById('hudStatusText').innerText = "HOLD: HAND DETECTED ON PLATTER";
+        document.getElementById('hudStatusText').style.color = "#EF4444";
+        playBeep(220, 0.2);
+        return;
+      }
+      isScanning = true;
+
+      // 1. Trigger Optical Laser Sweep
+      const laser = document.getElementById('laserLine');
+      laser.classList.remove('scan-laser-active');
+      void laser.offsetWidth; // Trigger reflow
+      laser.classList.add('scan-laser-active');
+
+      document.getElementById('hudStatusText').innerText = "SAMPLING WEIGHT (5 READINGS)...";
+      document.getElementById('hudStatusText').style.color = "#60A5FA";
+
+      setTimeout(() => {
+        // Generate realistic randomized parcel
+        const l = Math.round(150 + Math.random() * 400);
+        const w = Math.round(120 + Math.random() * 320);
+        const h = Math.round(80 + Math.random() * 260);
+        const gross = +(0.4 + Math.random() * 9.5).toFixed(3);
+        const vol = +((l * w * h) / 5000000 * 1000).toFixed(3);
+        const billable = Math.max(gross, vol);
+        const delta = Math.max(0, +(vol - gross).toFixed(3));
+        const barcode = "YT" + Math.floor(100000000 + Math.random() * 900000000);
+        const weightFluctuation_g = Math.round(1 + Math.random() * 6); // 1g to 7g (<10g threshold)
+
+        currentBox = { l, w, h };
+        drawStage();
+
+        // Update UI
+        document.getElementById('valL').innerText = (l / 10).toFixed(1);
+        document.getElementById('valW').innerText = (w / 10).toFixed(1);
+        document.getElementById('valH').innerText = (h / 10).toFixed(1);
+        document.getElementById('valGross').innerText = gross.toFixed(3);
+        document.getElementById('valVol').innerText = vol.toFixed(3);
+        document.getElementById('valVolCm3').innerText = (Math.round((l * w * h) / 1000)).toLocaleString();
+        document.getElementById('valBillable').innerText = billable.toFixed(3) + " kg";
+        document.getElementById('barcodeDisplay').innerText = barcode;
+        document.getElementById('hudDimText').innerText = `BOX: ${l} × ${w} × ${h} mm`;
+        document.getElementById('hudStatusText').innerText = `STABLE (DELTA: ${weightFluctuation_g}g <= 10g) -> ACCEPTED`;
+        document.getElementById('hudStatusText').style.color = "#10B981";
+
+        const recBadge = document.getElementById('recoveryBadge');
+        if (delta > 0.05) {
+          recBadge.innerText = `⚡ +${delta.toFixed(3)} kg UNBILLED VOLUME RECOVERED`;
+          recBadge.style.display = "inline-block";
+          totalRevenueRecovered += Math.round(delta * 80);
+          document.getElementById('revenueToday').innerText = `SAVED: +₹${totalRevenueRecovered.toLocaleString()} TODAY`;
+        } else {
+          recBadge.style.display = "none";
+        }
+
+        // Add to history
+        const d = new Date();
+        manifestHistory.unshift({
+          time: d.toTimeString().split(' ')[0],
+          barcode,
+          dim: `${(l/10).toFixed(0)} × ${(w/10).toFixed(0)} × ${(h/10).toFixed(0)}`,
+          gross,
+          billable,
+          delta
+        });
+        renderManifestTable();
+
+        playSuccessChime();
+        isScanning = false;
+      }, 420);
+    }
+
+    // Auto Demo Mode Loop
+    let autoTimer = null;
+    document.getElementById('btnAutoDemo').addEventListener('click', () => {
+      const btn = document.getElementById('btnAutoDemo');
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+        btn.innerText = "AUTO DEMO";
+        btn.style.background = "#1C2230";
+      } else {
+        btn.innerText = "STOP DEMO";
+        btn.style.background = "#F07204";
+        executeScan();
+        autoTimer = setInterval(executeScan, 2200);
+      }
+    });
+
+    // Event Listeners
+    document.getElementById('btnScanTrigger').addEventListener('click', executeScan);
+    document.getElementById('btnZeroScale').addEventListener('click', () => {
+      document.getElementById('valGross').innerText = "0.000";
+      playBeep(440, 0.1);
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        executeScan();
+      } else if (e.key === 'z' || e.key === 'Z') {
+        document.getElementById('valGross').innerText = "0.000";
+        playBeep(440, 0.1);
+      }
+    });
+
+    // Initial render
+    setTimeout(resizeCanvas, 50);
+  </script>
+</body>
+</html>

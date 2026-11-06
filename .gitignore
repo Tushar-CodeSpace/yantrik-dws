@@ -1,0 +1,33 @@
+# Operating Systems
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# Database & Runtime Data
+*.db
+*.sqlite
+*.sqlite3
+data/
+*.wal
+*.shm
+
+# Logs & Temporary files
+*.log
+*.tmp
+*.bak

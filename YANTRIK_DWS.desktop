@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=YANTRIK DWS-S01
+GenericName=Industrial Dimensioning & Weighing Workstation
+Comment=Launch YANTRIK DWS-S01 Operator Touchscreen HMI
+Exec=bash -c "cd $(dirname %k) && ./launch_yantrik_dws.sh"
+Icon=utilities-terminal
+Terminal=true
+Categories=Manufacturing;Engineering;Development;
+StartupNotify=true

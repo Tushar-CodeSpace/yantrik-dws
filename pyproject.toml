@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yantrik-dws"
+version = "1.1.0"
+description = "YANTRIK DWS-S01 Static Dimensioning, Weighing, and Scanning Workstation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary Commercial" }
+authors = [
+    { name = "YANTRIK Engineering Intelligence", email = "engineering@yantrik.internal" }
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Manufacturing",
+    "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux"
+]
+
+[project.scripts]
+yantrik-dws = "yantrik_dws.server:run_server"
+
+[tool.setuptools.packages.find]
+where = ["src"]

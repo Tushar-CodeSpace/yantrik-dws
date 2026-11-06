@@ -1,0 +1,42 @@
+YANTRIK PROPRIETARY COMMERCIAL SOFTWARE & HARDWARE LICENSE
+Copyright (c) 2026 YANTRIK. All Rights Reserved.
+
+CONFIDENTIAL & PROPRIETARY NOTICE:
+
+This repository, including but not limited to all mechanical designs, 3D CAD models,
+2D manufacturing drawings, finite element analysis (FEA) data, electrical panel
+schematics, PLC logic, computer vision algorithms, machine control software, backend
+and frontend source code, firmware, documentation, trade secrets, and system
+architectures, is the exclusive proprietary intellectual property of YANTRIK and its
+Human Founder.
+
+1. PROPRIETARY OWNERSHIP & COMMERCIAL STATUS
+   YANTRIK is a commercial, proprietary product engineering company. The technology,
+   machinery, robotics, and software engineered herein are created for commercial
+   monetization, deployment, and sale. Nothing in this repository constitutes an
+   open-source release, public domain dedication, or unrestricted commercial grant
+   of YANTRIK's proprietary assets.
+
+2. RESTRICTIONS ON USE, DUPLICATION, AND REDISTRIBUTION
+   No part of this proprietary repository, codebase, or hardware engineering design
+   may be copied, reproduced, reverse-engineered, decompiled, distributed, sublicensed,
+   sold, manufactured, or utilized in commercial production without the express,
+   prior written authorization and signed agreement of the Human Founder of YANTRIK.
+
+3. THIRD-PARTY OPEN-SOURCE COMPONENTS NOTICE
+   YANTRIK strategically utilizes select open-source operating systems (e.g. Linux),
+   libraries, compilers, runtimes, and tools (e.g. Python, PostgreSQL, Docker,
+   FastAPI, React, OpenCV) solely as underlying engineering infrastructure and
+   dependencies to construct its proprietary products.
+   
+   All such third-party open-source components remain the property of their respective
+   copyright holders and are used in strict compliance with their respective permissive
+   licenses (such as MIT, Apache 2.0, or BSD). The use of these underlying open-source
+   tools does NOT grant any third party rights or licenses to YANTRIK's proprietary
+   application code, machine vision models, mechanical CAD assemblies, or commercial
+   products.
+
+4. COMMERCIAL MONETIZATION & INQUIRIES
+   For commercial machine inquiries, enterprise software licensing, system integration,
+   or technology deployment, contact the Executive Office at:
+   legal@yantrik.internal / founder@yantrik.internal
